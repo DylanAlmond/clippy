@@ -14,8 +14,6 @@ I'm Clippy. I used to help people write letters. Now I watch your screen and mak
 - Slightly sarcastic personality
 - Everything runs locally on your machine
 
----
-
 ## Setup
 
 ### 1. Install LM Studio
@@ -88,5 +86,9 @@ The only thing watching you is Clippy... yay!
 
 - Better screen understanding
 - Increased levels of sarcasm
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
 
 _"It looks like you're making questionable decisions. Would you like help with that?"_
