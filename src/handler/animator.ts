@@ -171,7 +171,17 @@ export class Animator<TSprite extends Sprite> {
         console.error('Error in onStateChange callback:', e);
       }
 
-      if (state === AnimatorState.EXITED) {
+      if (state === AnimatorState.WAITING) {
+        // Resolve the promise so async/await can continue
+        if (this.currentResolve) {
+          this.currentResolve(true);
+          this.currentResolve = null;
+        }
+        // If there are animations waiting, force the current one to exit
+        if (this.animationQueue.length > 0) {
+          this.exitAnimation();
+        }
+      } else if (state === AnimatorState.EXITED) {
         if (this.currentResolve) {
           this.currentResolve(true);
           this.currentResolve = null;
