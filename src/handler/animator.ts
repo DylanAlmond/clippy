@@ -1,4 +1,4 @@
-import { Sprite, Frame, AnimationName } from '../types';
+import { Sprite, Frame, AnimationName, Animation } from '../types';
 import map from '../assets/map.png';
 import { playSound } from '../util/sound';
 
@@ -6,6 +6,10 @@ export enum AnimatorState {
   WAITING = 1,
   EXITED = 0
 }
+
+type AnimatorAnim = Animation & {
+  usesExitBranching: boolean;
+};
 
 /**
  * Sprite animator class. Handles playing animations, branching, sounds, and sequential queueing.
@@ -17,7 +21,7 @@ export class Animator<TSprite extends Sprite> {
   private sprite: TSprite;
   private img: HTMLImageElement;
 
-  private currentAnimation: any = null;
+  private currentAnimation: AnimatorAnim | null = null;
   private animationName: AnimationName<TSprite> | null = null;
 
   private frameIndex = 0;
@@ -25,6 +29,9 @@ export class Animator<TSprite extends Sprite> {
 
   private exiting = false;
   private timeout: number | null = null;
+
+  private maxBranchCount = 4;
+  private branchCount = 0;
 
   // Queue System Properties
   private animationQueue: Array<{
@@ -61,9 +68,11 @@ export class Animator<TSprite extends Sprite> {
   play(
     name: AnimationName<TSprite>,
     onStateChange?: (name: AnimationName<TSprite>, state: AnimatorState) => void
-  ): boolean {
-    this.clearQueue();
-    return this.startAnimation(name, onStateChange, undefined);
+  ): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      this.clearQueue();
+      this.startAnimation(name, onStateChange, resolve);
+    });
   }
 
   /**
@@ -83,7 +92,9 @@ export class Animator<TSprite extends Sprite> {
         this.animationQueue.push({ name, onStateChange, resolve });
 
         // If the current animation is stuck waiting on exit branching, force it to exit
-        this.exitAnimation();
+        if (this.canExit()) {
+          this.exitAnimation();
+        }
       }
     });
   }
@@ -155,7 +166,14 @@ export class Animator<TSprite extends Sprite> {
 
     this.stopInternal();
 
-    this.currentAnimation = anim;
+    // Check this animation contains exit branches
+    const usesExitBranching = !!anim.frames.find((f) => f.exitBranch !== undefined);
+
+    this.currentAnimation = {
+      frames: anim.frames,
+      usesExitBranching: usesExitBranching
+    };
+
     this.animationName = name;
     this.currentResolve = resolve ?? null;
 
@@ -171,17 +189,7 @@ export class Animator<TSprite extends Sprite> {
         console.error('Error in onStateChange callback:', e);
       }
 
-      if (state === AnimatorState.WAITING) {
-        // Resolve the promise so async/await can continue
-        if (this.currentResolve) {
-          this.currentResolve(true);
-          this.currentResolve = null;
-        }
-        // If there are animations waiting, force the current one to exit
-        if (this.animationQueue.length > 0) {
-          this.exitAnimation();
-        }
-      } else if (state === AnimatorState.EXITED) {
+      if (state === AnimatorState.EXITED) {
         if (this.currentResolve) {
           this.currentResolve(true);
           this.currentResolve = null;
@@ -201,6 +209,7 @@ export class Animator<TSprite extends Sprite> {
     this.currentAnimation = null;
     this.currentFrame = null;
     this.animationName = null;
+    this.branchCount = 0;
   }
 
   private step = () => {
@@ -224,11 +233,7 @@ export class Animator<TSprite extends Sprite> {
     this.timeout = window.setTimeout(this.step, duration);
 
     if (this.onStateChange && frameChanged && this.isLastFrame()) {
-      if (this.currentAnimation.useExitBranching && !this.exiting) {
-        this.onStateChange(this.animationName!, AnimatorState.WAITING);
-      } else {
-        this.onStateChange(this.animationName!, AnimatorState.EXITED);
-      }
+      this.onStateChange(this.animationName!, AnimatorState.EXITED);
     }
   };
 
@@ -243,9 +248,13 @@ export class Animator<TSprite extends Sprite> {
       return frame.exitBranch;
     }
 
+    const canBranch = this.branchCount < this.maxBranchCount;
+
     // Weighted branching
-    if (frame.branching?.branches?.length) {
+    if (canBranch && frame.branching?.branches?.length) {
       let rnd = Math.random() * 100;
+
+      this.branchCount++;
 
       for (const branch of frame.branching.branches) {
         if (rnd <= branch.weight) {
@@ -261,6 +270,12 @@ export class Animator<TSprite extends Sprite> {
   private isLastFrame(): boolean {
     if (!this.currentAnimation) return false;
     return this.frameIndex >= this.currentAnimation.frames.length - 1;
+  }
+
+  private canExit(): boolean {
+    return (
+      !!this.currentAnimation && this.currentAnimation?.usesExitBranching && this.isLastFrame()
+    );
   }
 
   private draw(): void {
