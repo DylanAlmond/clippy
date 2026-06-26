@@ -5,6 +5,18 @@ import { updateWindowSize } from './util/window';
 import { AnimationName } from './types';
 import sprite from './util/sprite';
 
+const DEBUG = false;
+
+const searchingAnims: AnimationName<typeof sprite>[] = [
+  'CheckingSomething',
+  'Searching',
+  'Processing'
+];
+
+if (DEBUG) {
+  document.body.style.backgroundColor = 'blue';
+}
+
 const canvas = document.querySelector('#canvas') as HTMLCanvasElement;
 const assistant = document.querySelector('#assistant') as HTMLElement;
 
@@ -18,17 +30,23 @@ observer.observe(assistant);
 
 async function playIntro() {
   await animator.queue('Greeting');
-  await animator.queue('GetAttention');
-  bubble.show('Hello! I am Clippy!');
+
+  await Promise.all([bubble.queue('Hello! I am Clippy!', 4000), animator.queue('Wave')]);
 }
 
 // Helper function to handle LLM interaction
 async function triggerClippyVision() {
-  // 1. Play an animation and show "thinking" text
-  // animator.play('GetAttention');
-  // bubble.show('Let me take a look at your screen...');
-
   try {
+    let hasResponse = false;
+
+    // Enter looping search animation
+    animator.play(searchingAnims[Math.floor(Math.random() * searchingAnims.length)]);
+
+    // Force exit loop after a few seconds if not already received response
+    setTimeout(() => {
+      !hasResponse && animator.exitAnimation();
+    }, 6000);
+
     // 2. Dynamically get all valid animations from the sprite
     const validAnimations = Object.keys(sprite.animations);
 
@@ -38,28 +56,26 @@ async function triggerClippyVision() {
       { animations: validAnimations } // <-- Passed to Rust
     );
 
+    hasResponse = true;
+
     // 4. Double-check the LLM chose a valid animation (fallback to Idle if it hallucinated)
     const isAnimationValid = validAnimations.includes(reaction.animation);
 
     if (isAnimationValid) {
-      animator.play(reaction.animation as AnimationName<typeof sprite>);
+      animator.queue(reaction.animation as AnimationName<typeof sprite>);
+      bubble.queue(reaction.text, 6000);
     } else {
-      animator.play('Idle1_1');
+      animator.queue('Idle1_1');
     }
 
     // 5. Show the text
     bubble.show(reaction.text);
   } catch (error) {
     console.error('Clippy Vision failed:', error);
-    animator.play('Alert');
-    bubble.show("I couldn't see your screen. Is LM Studio running?");
+    animator.queue('Alert');
+    bubble.queue("I couldn't see your screen. Is LM Studio running?");
   }
 }
-
-// Trigger LLM vision on click
-// canvas.addEventListener('click', () => {
-//   triggerClippyVision();
-// });
 
 async function startVisionLoop() {
   while (true) {
@@ -76,8 +92,8 @@ async function startVisionLoop() {
 (async () => {
   await playIntro();
 
-  animator.play('GetAttention');
-  bubble.show('Let me take a look at your screen...');
+  animator.queue('GetAttention');
+  bubble.queue('Let me take a look at your screen...');
 
   await startVisionLoop();
 })();
