@@ -3,6 +3,7 @@ import { Animator } from './animator';
 import { SpeechBubble } from './speech';
 import { AnimationName, Sprite } from '../types';
 import { DEBUG } from '../util/constants';
+import sprite from '../util/sprite';
 
 export enum AgentState {
   INTRO = 'INTRO',
@@ -12,36 +13,52 @@ export enum AgentState {
   ERROR = 'ERROR'
 }
 
-export type AgentConfig<TSprite extends Sprite> = {
-  idleAnims?: AnimationName<TSprite>[];
-  searchingAnims?: AnimationName<TSprite>[];
-};
-
-export class ClippyAgent<TSprite extends Sprite> {
-  private animator: Animator<TSprite>;
+export class ClippyAgent {
+  private sprite = sprite;
+  private animator: Animator<typeof this.sprite>;
   private bubble: SpeechBubble;
 
   private state: AgentState = AgentState.IDLE;
   private isRunning = false;
 
-  private idleAnims: AnimationName<TSprite>[];
-  private searchingAnims: AnimationName<TSprite>[];
-  private validAnimations: string[];
+  private idleAnims: AnimationName<typeof this.sprite>[] = [
+    'Idle1_1',
+    'IdleAtom',
+    'IdleEyeBrowRaise',
+    'IdleFingerTap',
+    'IdleHeadScratch',
+    'IdleRopePile',
+    'IdleSideToSide',
+    'IdleSnooze',
+    'GetArtsy',
+    'LookDown',
+    'LookDownLeft',
+    'LookDownRight',
+    'LookLeft',
+    'LookRight',
+    'LookUp',
+    'LookUpLeft',
+    'LookUpRight',
+    'RestPose',
+    'GetWizardy',
+    'GetAttention',
+    'Save',
+    'Writing'
+  ];
+
+  private searchingAnims: AnimationName<typeof this.sprite>[] = [
+    'CheckingSomething',
+    'Searching',
+    'Processing'
+  ];
+
+  private validAnimations = Object.keys(this.sprite.animations);
 
   private minimumVisionIntervalMs = 15000; // Time spent idle before next vision check
 
-  constructor(
-    animator: Animator<TSprite>,
-    bubble: SpeechBubble,
-    sprite: TSprite,
-    config?: AgentConfig<TSprite>
-  ) {
-    this.animator = animator;
-    this.bubble = bubble;
-    this.validAnimations = Object.keys(sprite.animations);
-
-    this.idleAnims = config?.idleAnims || [];
-    this.searchingAnims = config?.searchingAnims || [];
+  constructor(canvas: HTMLCanvasElement, bubble: HTMLDivElement) {
+    this.animator = new Animator(canvas, this.sprite);
+    this.bubble = new SpeechBubble(bubble);
   }
 
   /**
@@ -64,6 +81,14 @@ export class ClippyAgent<TSprite extends Sprite> {
     this.bubble.hide();
   }
 
+  /**
+   * Display Message
+   */
+  public talk(message: string, animation?: AnimationName<typeof this.sprite>) {
+    this.bubble.show(message);
+    animation && this.animator.play(animation);
+  }
+
   // -------------------------
   // State Machine Logic
   // -------------------------
@@ -71,13 +96,13 @@ export class ClippyAgent<TSprite extends Sprite> {
   private async runIntro() {
     this.setState(AgentState.INTRO);
 
-    await this.animator.queue('Greeting' as AnimationName<TSprite>);
+    await this.animator.queue('Greeting' as AnimationName<typeof this.sprite>);
 
     if (!this.isRunning) return;
 
     await Promise.all([
       this.bubble.queue('Hello! I am Clippy!', 4000),
-      this.animator.play('Wave' as AnimationName<TSprite>)
+      this.animator.play('Wave' as AnimationName<typeof this.sprite>)
     ]);
   }
 
@@ -142,9 +167,9 @@ export class ClippyAgent<TSprite extends Sprite> {
       this.setState(AgentState.REACTING);
 
       const isAnimationValid = this.validAnimations.includes(reaction.animation);
-      const animName = (
-        isAnimationValid ? reaction.animation : 'Idle1_1'
-      ) as AnimationName<TSprite>;
+      const animName = (isAnimationValid ? reaction.animation : 'Idle1_1') as AnimationName<
+        typeof this.sprite
+      >;
 
       // Calculate read duration based on text length
       const bubbleDuration = Math.max(4000, reaction.text.length * 60);
@@ -161,7 +186,7 @@ export class ClippyAgent<TSprite extends Sprite> {
       this.setState(AgentState.ERROR);
 
       await Promise.all([
-        this.animator.play('Alert' as AnimationName<TSprite>),
+        this.animator.play('Alert' as AnimationName<typeof this.sprite>),
         this.bubble.queue("I couldn't see your screen. Is LM Studio running?", 4000)
       ]);
     }
