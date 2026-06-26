@@ -42,15 +42,44 @@ Leave the server running while using Clippy.
 
 ## Installation
 
+### 1. Install Rust
+
+Tauri requires Rust and Cargo.
+
+Install Rust using rustup:
+
+**macOS / Linux**
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+**Windows**
+
+Download and run:
+
+https://rustup.rs
+
+After installation, restart your terminal and verify:
+
+```bash
+rustc --version
+cargo --version
+```
+
+### 2. Install dependencies
+
 ```bash
 yarn install
 ```
+
+### 3. Run Clippy in development
 
 ```bash
 yarn tauri dev
 ```
 
-To build:
+### Build for production
 
 ```bash
 yarn tauri build
