@@ -147,21 +147,19 @@ fn extract_json(text: &str) -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let file_appender = tracing_appender::rolling::daily("logs", "llm.log");
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-
-    tracing_subscriber::registry()
-        .with(fmt::layer().with_writer(non_blocking).with_ansi(false))
-        .init();
-
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            let config_path = app
-                .path()
-                .app_data_dir()
-                .expect("Failed to get app data directory")
-                .join("config.json");
+            let data_path = app.path().app_data_dir().unwrap();
+
+            let file_appender = tracing_appender::rolling::daily(data_path.join("logs"), "llm.log");
+            let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+            tracing_subscriber::registry()
+                .with(fmt::layer().with_writer(non_blocking).with_ansi(false))
+                .init();
+
+            let config_path = data_path.join("config.json");
 
             tracing::info!("Config path: {:?}", config_path);
 

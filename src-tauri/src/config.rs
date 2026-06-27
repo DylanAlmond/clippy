@@ -18,7 +18,7 @@ impl Default for ClippyConfig {
             model: "google/gemma-4-e4b".to_string(),
             api_url: "http://localhost:1234/api/v1/chat".to_string(),
             temperature_min: 0.3,
-            temperature_max: 0.7,
+            temperature_max: 1.0,
             max_output_tokens: 512,
         }
     }
