@@ -1,10 +1,17 @@
-use base64::{engine::general_purpose, Engine as _};
-use image::ImageFormat;
+use mistralrs::{
+    IsqBits, Model, ModelBuilder, MultimodalMessages, RequestBuilder, SamplingParams,
+    TextMessageRole,
+};
 use rand::random_range;
 use serde::{Deserialize, Serialize};
-use std::io::Cursor;
+use std::sync::Arc;
+use tauri::State;
 use tracing_subscriber::{fmt, prelude::*};
 use xcap::Monitor;
+
+struct AppState {
+    model: std::sync::Arc<Model>,
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 struct ClippyAction {
@@ -12,20 +19,19 @@ struct ClippyAction {
     animation: String,
 }
 
+const MODEL_ID: &str = "google/gemma-4-E4B-it";
+
 #[tauri::command]
-async fn get_clippy_reaction(animations: Vec<String>) -> Result<ClippyAction, String> {
+async fn get_clippy_reaction(
+    state: State<'_, AppState>,
+    animations: Vec<String>,
+) -> Result<ClippyAction, String> {
     // Capture the screen
     let monitors = Monitor::all().map_err(|e| e.to_string())?;
     let main_monitor = monitors.first().ok_or("No monitor found")?;
-    let image = main_monitor.capture_image().map_err(|e| e.to_string())?;
+    let image_buffer = main_monitor.capture_image().map_err(|e| e.to_string())?;
 
-    // Convert image to base64 data URL
-    let mut buffer = Vec::new();
-    image
-        .write_to(&mut Cursor::new(&mut buffer), ImageFormat::Png)
-        .map_err(|e| e.to_string())?;
-    let b64_image = general_purpose::STANDARD.encode(&buffer);
-    let data_url = format!("data:image/png;base64,{}", b64_image);
+    let image = image::load_from_memory(&image_buffer).map_err(|e| e.to_string())?;
 
     // Create the system prompt with the animations list
     let anim_list = animations.join(", ");
@@ -40,81 +46,42 @@ async fn get_clippy_reaction(animations: Vec<String>) -> Result<ClippyAction, St
 
     let temperature = random_range(0.3..0.7);
 
-    // Prepare LM Studio Request
-    let url = "http://localhost:1234/api/v1/chat";
-    let payload = serde_json::json!({
-        "model": "google/gemma-4-e4b",
-        "system_prompt": system_prompt,
-        "input": [
-            {
-                "type": "text",
-                "content": "What do you think of what I'm doing right now?"
-            },
-            {
-                "type": "image",
-                "data_url": data_url
-            }
-        ],
-        "temperature": temperature,
-        "max_output_tokens": 512
-    });
+    let sampling = SamplingParams {
+        temperature: Some(temperature),
+        max_len: Some(512),
+        ..SamplingParams::neutral()
+    };
 
-    // Create clone for log minus large screenshot
-    let mut log_payload = payload.clone();
-    if let Some(input) = log_payload["input"].as_array_mut() {
-        for item in input {
-            if item["type"] == "image" {
-                item["data_url"] = serde_json::Value::String("<base64 image omitted>".to_string());
-            }
-        }
-    }
+    let messages = MultimodalMessages::new()
+        .add_message(TextMessageRole::System, system_prompt)
+        .add_image_message(
+            TextMessageRole::User,
+            "What do you think of what I'm doing right now?",
+            vec![image],
+        );
 
     // Log request
-    tracing::info!(
-        "LLM Request:\n{}",
-        serde_json::to_string_pretty(&log_payload).unwrap()
-    );
+    tracing::info!("Sending request to mistral.rs model...");
 
-    // Send request to local LM Studio server
-    let client = reqwest::Client::new();
-    let response = client
-        .post(url)
-        .json(&payload)
-        .send()
+    let request = RequestBuilder::from(messages).set_sampling(sampling);
+
+    let response = state
+        .model
+        .send_chat_request(request)
         .await
-        .map_err(|e| format!("Is LM Studio running? Error: {}", e))?;
+        .map_err(|e| e.to_string())?;
 
-    let data: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
+    let content_str = response
+        .choices
+        .first()
+        .and_then(|c| c.message.content.clone())
+        .ok_or("No content in model response")?;
 
     // Log response
-    tracing::info!(
-        "LLM Response:\n{}",
-        serde_json::to_string_pretty(&data).unwrap()
-    );
-
-    // Parse LM Studio response (which returns an array of output items)
-    let output_array = data["output"]
-        .as_array()
-        .ok_or("Invalid LM Studio response: missing output array")?;
-
-    let mut content_str = "";
-    for item in output_array {
-        if item["type"].as_str() == Some("message") {
-            if let Some(content) = item["content"].as_str() {
-                content_str = content;
-                break;
-            }
-        }
-    }
-
-    if content_str.is_empty() {
-        // Log error
-        tracing::error!("No message content found. Response: {}", data);
-        return Err("No message content found in LM Studio response".into());
-    }
+    tracing::info!("LLM Response:\n{}", content_str);
 
     // Clean up the response (Gemma might wrap JSON in ```json ... ``` despite instructions)
-    let json_str = extract_json(content_str)?;
+    let json_str = extract_json(&content_str)?;
     let action: ClippyAction = serde_json::from_str(&json_str).map_err(|e| {
         tracing::error!("JSON parse failed: {}\nRaw response: {}", e, content_str);
         format!("Failed to parse JSON: {} - Raw: {}", e, content_str)
@@ -142,7 +109,31 @@ pub fn run() {
         .with(fmt::layer().with_writer(non_blocking).with_ansi(false))
         .init();
 
+    let model = tauri::async_runtime::block_on(async {
+        ModelBuilder::new(MODEL_ID)
+            .with_auto_isq(IsqBits::Four)
+            .with_logging()
+            // Uncomment for LLaVA 1.5:
+            // .with_chat_template("chat_templates/vicuna.json")
+            .build()
+            .await
+            .expect("Model load failed!")
+    });
+
     tauri::Builder::default()
+        .setup(|app| {
+            #[cfg(debug_assertions)] // only include this code on debug builds
+            {
+                use tauri::Manager;
+
+                let window = app.get_webview_window("main").unwrap();
+                window.open_devtools();
+            }
+            Ok(())
+        })
+        .manage(AppState {
+            model: Arc::new(model),
+        })
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![get_clippy_reaction])
         .run(tauri::generate_context!())
