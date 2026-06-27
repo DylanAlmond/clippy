@@ -13,9 +13,9 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "clippy",
-        "width": 200,
-        "height": 200,
+        "title": "Clippy",
+        "width": 124,
+        "height": 93,
         "decorations": false,
         "transparent": true,
         "resizable": false,
