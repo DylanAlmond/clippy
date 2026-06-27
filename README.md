@@ -41,7 +41,7 @@ https://lmstudio.ai
 
 ### 2. Download a model
 
-Search for and download:
+Search for and download a vision-capable model. The default is:
 
 ```text
 google/gemma-4-e4b
@@ -56,6 +56,41 @@ Developer → Local Server → Start Server
 ```
 
 Leave the server running while using Clippy.
+
+## Configuration
+
+Clippy stores its settings in `clippy-config.json` (created automatically on first run in the same directory as the app).
+
+### Default configuration
+
+```json
+{
+  "model": "google/gemma-4-e4b",
+  "api_url": "http://localhost:1234/api/v1/chat",
+  "temperature_min": 0.3,
+  "temperature_max": 0.7,
+  "max_output_tokens": 512
+}
+```
+
+### Settings explained
+
+| Setting             | Description                          | Default                             |
+| ------------------- | ------------------------------------ | ----------------------------------- |
+| `model`             | The model identifier in LM Studio    | `google/gemma-4-e4b`                |
+| `api_url`           | LM Studio API endpoint               | `http://localhost:1234/api/v1/chat` |
+| `temperature_min`   | Minimum randomness for responses     | `0.3`                               |
+| `temperature_max`   | Maximum randomness for responses     | `0.7`                               |
+| `max_output_tokens` | Maximum length of Clippy's responses | `512`                               |
+
+Make sure LM Studio's server is set to allow external connections if needed.
+
+### Adjusting personality
+
+Tweak the temperature range to change Clippy's personality:
+
+- **Lower values (0.1 - 0.4)**: More predictable, consistent responses
+- **Higher values (0.7 - 1.0)**: More random, creative (and possibly weirder) responses
 
 ## Installation
 
