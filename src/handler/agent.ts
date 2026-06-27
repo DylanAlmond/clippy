@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { Animator } from './animator';
 import { SpeechBubble } from './speech';
-import { AnimationName, Sprite } from '../types';
+import { AnimationName } from '../types';
 import { DEBUG } from '../util/constants';
 import sprite from '../util/sprite';
 
