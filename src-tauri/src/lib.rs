@@ -1,10 +1,16 @@
+mod config;
 use base64::{engine::general_purpose, Engine as _};
 use image::ImageFormat;
 use rand::random_range;
 use serde::{Deserialize, Serialize};
-use std::io::Cursor;
+use std::{
+    io::Cursor,
+    sync::{Arc, Mutex},
+};
 use tracing_subscriber::{fmt, prelude::*};
 use xcap::Monitor;
+
+use crate::config::{get_config, update_config, ClippyConfig};
 
 #[derive(Serialize, Deserialize, Clone)]
 struct ClippyAction {
@@ -13,7 +19,13 @@ struct ClippyAction {
 }
 
 #[tauri::command]
-async fn get_clippy_reaction(animations: Vec<String>) -> Result<ClippyAction, String> {
+async fn get_clippy_reaction(
+    animations: Vec<String>,
+    state: tauri::State<'_, Arc<Mutex<ClippyConfig>>>,
+) -> Result<ClippyAction, String> {
+    // Get current config
+    let config = state.lock().unwrap().clone();
+
     // Capture the screen
     let monitors = Monitor::all().map_err(|e| e.to_string())?;
     let main_monitor = monitors.first().ok_or("No monitor found")?;
@@ -38,12 +50,11 @@ async fn get_clippy_reaction(animations: Vec<String>) -> Result<ClippyAction, St
         anim_list
     );
 
-    let temperature = random_range(0.3..0.7);
+    let temperature = random_range(config.temperature_min..config.temperature_max);
 
     // Prepare LM Studio Request
-    let url = "http://localhost:1234/api/v1/chat";
     let payload = serde_json::json!({
-        "model": "google/gemma-4-e4b",
+        "model": config.model,
         "system_prompt": system_prompt,
         "input": [
             {
@@ -56,7 +67,7 @@ async fn get_clippy_reaction(animations: Vec<String>) -> Result<ClippyAction, St
             }
         ],
         "temperature": temperature,
-        "max_output_tokens": 512
+        "max_output_tokens": config.max_output_tokens
     });
 
     // Create clone for log minus large screenshot
@@ -78,7 +89,7 @@ async fn get_clippy_reaction(animations: Vec<String>) -> Result<ClippyAction, St
     // Send request to local LM Studio server
     let client = reqwest::Client::new();
     let response = client
-        .post(url)
+        .post(config.api_url)
         .json(&payload)
         .send()
         .await
@@ -142,9 +153,17 @@ pub fn run() {
         .with(fmt::layer().with_writer(non_blocking).with_ansi(false))
         .init();
 
+    let config = ClippyConfig::load();
+    let config_state = Arc::new(Mutex::new(config));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_clippy_reaction])
+        .manage(config_state)
+        .invoke_handler(tauri::generate_handler![
+            get_clippy_reaction,
+            get_config,
+            update_config
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
