@@ -6,13 +6,30 @@ Remember me?
 
 I'm Clippy. I used to help people write letters. Now I watch your screen and make unsolicited comments about what you're doing.
 
-## Features
+## What does Clippy actually do?
 
-- Animated Clippy desktop companion
-- Watches what's happening on your screen
-- Periodically comments on what you're doing
-- Slightly sarcastic personality
-- Everything runs locally on your machine
+Every so often, Clippy takes a look at your screen and reacts to whatever you're doing.
+
+You might see things like:
+
+> "It looks like you are simply staring at a screen. Perhaps I could explain how to actually _do_ something?"
+
+> "Another YouTube tab? Research, I'm sure."
+
+> "That TODO comment has been there for a while, hasn't it?"
+
+> "You seem to have opened seventeen documentation pages instead of reading the first one."
+
+He means well, probably.
+
+## Privacy
+
+Everything happens locally:
+
+- Screenshots never leave your computer.
+- The AI runs through your local LM Studio server.
+
+The only thing watching you is Clippy.
 
 ## Setup
 
@@ -85,36 +102,10 @@ yarn tauri dev
 yarn tauri build
 ```
 
-## What does Clippy actually do?
-
-Every so often, Clippy takes a look at your screen and reacts to whatever you're doing.
-
-You might see things like:
-
-> "It looks like you are simply staring at a screen. Perhaps I could explain how to actually _do_ something?"
-
-> "Another YouTube tab? Research, I'm sure."
-
-> "That TODO comment has been there for a while, hasn't it?"
-
-> "You seem to have opened seventeen documentation pages instead of reading the first one."
-
-He means well. Probably.
-
-## Privacy
-
-Everything happens locally:
-
-- Screenshots never leave your computer.
-- The AI runs through your local LM Studio server.
-- No accounts, subscriptions, or telemetry.
-
-The only thing watching you is Clippy... yay!
-
 ## Future Plans
 
 - Better screen understanding
-- Increased levels of sarcasm
+- Increased levels of sarcasm (maybe)
 
 ## License
 
