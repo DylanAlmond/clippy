@@ -59,7 +59,13 @@ Leave the server running while using Clippy.
 
 ## Configuration
 
-Clippy stores its settings in `clippy-config.json` (created automatically on first run in the same directory as the app).
+Clippy stores its settings in a `config.json` file, created automatically on first run in your system's application data directory:
+
+| Platform    | Location                                                         |
+| ----------- | ---------------------------------------------------------------- |
+| **macOS**   | `~/Library/Application Support/com.clippy.app/config.json`       |
+| **Windows** | `C:\Users\%USERNAME%\AppData\Roaming\com.clippy.app\config.json` |
+| **Linux**   | `~/.config/com.clippy.app/config.json`                           |
 
 ### Default configuration
 

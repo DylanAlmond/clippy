@@ -7,6 +7,7 @@ use std::{
     io::Cursor,
     sync::{Arc, Mutex},
 };
+use tauri::Manager;
 use tracing_subscriber::{fmt, prelude::*};
 use xcap::Monitor;
 
@@ -153,12 +154,22 @@ pub fn run() {
         .with(fmt::layer().with_writer(non_blocking).with_ansi(false))
         .init();
 
-    let config = ClippyConfig::load();
-    let config_state = Arc::new(Mutex::new(config));
-
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(config_state)
+        .setup(|app| {
+            let config_path = app
+                .path()
+                .app_data_dir()
+                .expect("Failed to get app data directory")
+                .join("config.json");
+
+            tracing::info!("Config path: {:?}", config_path);
+
+            let config = ClippyConfig::load(&config_path);
+            app.manage(Arc::new(Mutex::new(config)));
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_clippy_reaction,
             get_config,

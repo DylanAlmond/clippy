@@ -1,6 +1,7 @@
-use std::sync::{Arc, Mutex};
-
 use serde::{Deserialize, Serialize};
+use tauri::Manager;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ClippyConfig {
@@ -24,15 +25,9 @@ impl Default for ClippyConfig {
 }
 
 impl ClippyConfig {
-    pub fn config_path() -> std::path::PathBuf {
-        std::path::PathBuf::from("clippy-config.json")
-    }
-
-    pub fn load() -> Self {
-        let path = Self::config_path();
-
+    pub fn load(path: &PathBuf) -> Self {
         if path.exists() {
-            match std::fs::read_to_string(&path) {
+            match std::fs::read_to_string(path) {
                 Ok(contents) => match serde_json::from_str(&contents) {
                     Ok(config) => {
                         tracing::info!("Loaded config from {:?}", path);
@@ -45,17 +40,21 @@ impl ClippyConfig {
         }
 
         tracing::info!("Using default config");
-        
         let config = Self::default();
-        config.save();
+        config.save(path);
         config
     }
 
-    pub fn save(&self) {
-        let path = Self::config_path();
+    pub fn save(&self, path: &PathBuf) {
+        if let Some(parent) = path.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                tracing::error!("Failed to create config directory: {}", e);
+                return;
+            }
+        }
 
         if let Ok(contents) = serde_json::to_string_pretty(self) {
-            if let Err(e) = std::fs::write(&path, contents) {
+            if let Err(e) = std::fs::write(path, contents) {
                 tracing::error!("Failed to save config: {}", e);
             } else {
                 tracing::info!("Saved config to {:?}", path);
@@ -72,11 +71,18 @@ pub fn get_config(state: tauri::State<'_, Arc<Mutex<ClippyConfig>>>) -> ClippyCo
 #[tauri::command]
 pub fn update_config(
     state: tauri::State<'_, Arc<Mutex<ClippyConfig>>>,
+    app: tauri::AppHandle,
     config: ClippyConfig,
 ) -> Result<(), String> {
+    let config_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("config.json");
+
     let mut state_config = state.lock().map_err(|e| e.to_string())?;
     *state_config = config;
-    state_config.save();
+    state_config.save(&config_path);
     tracing::info!("Config updated: {:?}", state_config);
     Ok(())
 }
