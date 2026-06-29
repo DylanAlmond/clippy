@@ -148,6 +148,10 @@ yarn tauri build
 - Better screen understanding
 - Increased levels of sarcasm (maybe)
 
+## Acknowledgements
+
+Clippy's character assets and animations are ported from the excellent [ClippyJS](https://github.com/clippyjs/clippy.js) project. Huge thanks to the original contributors for painstakingly piecing together all of his audio and animations, I wouldn't have known where to begin with that.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
